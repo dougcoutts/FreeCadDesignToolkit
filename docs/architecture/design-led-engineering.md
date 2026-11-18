@@ -38,6 +38,24 @@ Categories are extensible and project-specific.
 
 A successful analysis does not itself imply design approval.
 
+## Workflow diagram
+
+The following diagram is rendered directly by GitHub from Mermaid source. Its editable standalone source is in [design-led-workflow.mmd](diagrams/design-led-workflow.mmd).
+
+```mermaid
+flowchart TD
+    D["Design requirements: intent and use cases"] --> E["Derived engineering requirements"]
+    E --> I["Engineering implementation: CAD and processes"]
+    I --> V["Verification and design review"]
+    V --> C{"Requirements satisfied?"}
+    C -->|Yes| A["Document evidence and approval"]
+    C -->|No| F["Engineering findings and trade-offs"]
+    F --> R{"Change design intent?"}
+    R -->|No| I
+    R -->|Proposed| O["Authorized design decision"]
+    O --> D
+```
+
 ## Implementation implications (not yet implemented)
 
 The Journal Manager will need a requirements register with stable identifiers, typed relationships, revision/status history, explicit decision and approval records, and traceable evidence. Preserve compatibility with the existing event schema until a reviewed migration plan is approved.
