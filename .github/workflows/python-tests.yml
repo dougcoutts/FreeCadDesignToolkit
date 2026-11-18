@@ -1,0 +1,30 @@
+name: Python unit tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run dependency-free unit tests
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          FREECAD_JOURNAL_PROJECT: ''
+        run: python -m unittest discover -s tests -v
