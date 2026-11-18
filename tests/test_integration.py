@@ -1,8 +1,10 @@
 import json, os, tempfile, unittest
 from pathlib import Path
 import sys
+from types import SimpleNamespace
+from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from journal_integration import record_fem, record_cad, record_validation, ENV
+from journal_integration import record_fem, record_cad, record_cad_artifact, record_validation, ENV
 from journal_manager import read_events, sha256
 
 class IntegrationTests(unittest.TestCase):
@@ -38,16 +40,105 @@ class IntegrationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             record_fem('contact',{'solver':{'final_finished':False}},p,p)
         self.assertEqual(read_events(self.root/'journal'),[])
-    def test_saved_cad_and_validation(self):
+    def test_headless_cad_and_validation(self):
         p=self.file('v4.FCStd','test bytes')
         script=self.file('build.py','pass')
-        record_cad(p,script,'V4')
+        with patch.dict(sys.modules, {'FreeCADGui': None}):
+            event_path = record_cad_artifact(p, script, 'V4')
+        self.assert_cad_evidence(event_path, p, script)
         report=self.file('validation.json','{"solid": {"valid": true}}')
         record_validation({'solid':{'valid':True}, 'boolean_retries':0},p,report)
         self.assertEqual({e['event_type'] for e in read_events(self.root/'journal')},{'design_revision','observation'})
+
+    def cad_document(self, model_path):
+        gui_doc = SimpleNamespace(Modified=False)
+        doc = SimpleNamespace(Name='Shelf', FileName=str(model_path))
+        gui = SimpleNamespace(getDocument=lambda name: gui_doc if name == doc.Name else None)
+        gui_patch = patch.dict(sys.modules, {'FreeCADGui': gui})
+        gui_patch.start()
+        self.addCleanup(gui_patch.stop)
+        return doc, gui_doc
+
+    def assert_cad_evidence(self, event_path, model, script):
+        event = json.loads(event_path.read_text(encoding='utf-8'))
+        self.assertEqual(event['event_type'], 'design_revision')
+        self.assertEqual(event['design_revision'], 'V4')
+        self.assertEqual(event['artifact_refs'], [
+            {'role': 'model', 'path': str(model.resolve()), 'sha256': sha256(model)},
+            {'role': 'build_script', 'path': str(script.resolve()), 'sha256': sha256(script)},
+        ])
+        self.assertEqual(event['data']['model_sha256'], event['artifact_refs'][0]['sha256'])
+
+    def test_interactive_cad_records_saved_document(self):
+        model = self.file('v4.FCStd', 'model bytes')
+        script = self.file('build.py', 'pass')
+        doc, _ = self.cad_document(model)
+        event_path = record_cad(doc, model, script, 'V4')
+        self.assert_cad_evidence(event_path, model, script)
+
+    def test_interactive_cad_rejects_unsaved_document(self):
+        model = self.file('v4.FCStd', 'model bytes')
+        script = self.file('build.py', 'pass')
+        doc, _ = self.cad_document('')
+        with self.assertRaisesRegex(ValueError, 'Save FreeCAD document'):
+            record_cad(doc, model, script)
+        self.assertEqual(read_events(self.root/'journal'), [])
+
+    def test_interactive_cad_rejects_path_mismatch(self):
+        model = self.file('v4.FCStd', 'model bytes')
+        other = self.file('other.FCStd', 'model bytes')
+        script = self.file('build.py', 'pass')
+        doc, _ = self.cad_document(other)
+        with self.assertRaisesRegex(ValueError, 'different model'):
+            record_cad(doc, model, script)
+        self.assertEqual(read_events(self.root/'journal'), [])
+
+    def test_interactive_cad_rejects_hash_mismatch_before_append(self):
+        model = self.file('v4.FCStd', 'model bytes')
+        script = self.file('build.py', 'pass')
+        doc, _ = self.cad_document(model)
+
+        def hash_with_model_change(path):
+            if path == script.resolve():
+                model.write_text('changed model bytes')
+            return sha256(path)
+
+        with patch('journal_integration.sha256', side_effect=hash_with_model_change):
+            with self.assertRaisesRegex(ValueError, 'model changed'):
+                record_cad(doc, model, script)
+        self.assertEqual(read_events(self.root/'journal'), [])
+
+    def test_interactive_cad_rechecks_modified_state_before_append(self):
+        model = self.file('v4.FCStd', 'model bytes')
+        script = self.file('build.py', 'pass')
+        doc, gui_doc = self.cad_document(model)
+
+        def hash_with_gui_edit(path):
+            if path == script.resolve():
+                gui_doc.Modified = True
+            return sha256(path)
+
+        with patch('journal_integration.sha256', side_effect=hash_with_gui_edit):
+            with self.assertRaisesRegex(ValueError, 'unsaved changes'):
+                record_cad(doc, model, script)
+        self.assertEqual(read_events(self.root/'journal'), [])
+
+    def test_headless_cad_requires_both_evidence_files(self):
+        model = self.file('v4.FCStd', 'model bytes')
+        script = self.file('build.py', 'pass')
+        with self.assertRaises(FileNotFoundError):
+            record_cad_artifact(self.root/'missing.FCStd', script)
+        with self.assertRaises(FileNotFoundError):
+            record_cad_artifact(model, self.root/'missing.py')
+        with self.assertRaises(ValueError):
+            record_cad_artifact(model, None)
+        self.assertEqual(read_events(self.root/'journal'), [])
+
     def test_disabled_is_noop(self):
         os.environ.pop(ENV,None)
-        self.assertIsNone(record_cad('missing.FCStd','missing.py'))
+        self.assertIsNone(record_cad(None, 'missing.FCStd', 'missing.py'))
+        self.assertIsNone(record_cad_artifact('missing.FCStd', 'missing.py'))
+        self.assertFalse((self.root/'journal').exists())
 
     def test_validation_requires_both_evidence_files(self):
         model=self.file('v4.FCStd','model bytes')

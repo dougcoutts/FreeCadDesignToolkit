@@ -1925,9 +1925,11 @@ if __name__ == "__main__":
 
 def save_and_journal(doc, path):
     """Explicitly save a built model and record immutable evidence when enabled."""
+    import os
+
     doc.saveAs(path)
     if os.environ.get("FREECAD_JOURNAL_PROJECT"):
-        _journal_bridge().record_cad(path, __file__, getattr(doc, "Name", None))
+        _journal_bridge().record_cad(doc, path, __file__, getattr(doc, "Name", None))
     return path
 
 # Optional engineering journal bridge; set FREECAD_JOURNAL_PROJECT to enable.
