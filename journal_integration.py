@@ -64,6 +64,40 @@ def record_fem(kind, summary, summary_path, config_path, model_path=None, run_di
         'Completed FEM calculation; results are recorded, not automatically approved as compliant.',
         tag,[config_path,summary_path],artifacts,data)
 
+def verify_saved_model(doc, expected_sha256=None, expected_path=None):
+    """Verify the saved FCStd evidence and GUI unsaved-change state.
+
+    FreeCAD App.Document has no Modified attribute in FreeCAD 1.1.4.
+    Gui.getDocument(doc.Name).Modified is the observed unsaved-change flag.
+    Fail closed if the matching GUI document cannot be checked.
+    """
+    model_path = getattr(doc, 'FileName', '')
+    if not model_path:
+        raise ValueError('Save FreeCAD document before journaling validation')
+    doc_name = getattr(doc, 'Name', None)
+    if not doc_name:
+        raise ValueError('Cannot identify FreeCAD document for GUI state check')
+    try:
+        import FreeCADGui as Gui
+        gui_doc = Gui.getDocument(doc_name)
+        if gui_doc is None:
+            raise ValueError('No matching FreeCAD GUI document for saved-model verification')
+        modified = bool(gui_doc.Modified)
+    except (ImportError, AttributeError) as exc:
+        raise ValueError('Cannot verify FreeCAD GUI document Modified state') from exc
+    if modified:
+        raise ValueError('FreeCAD document has unsaved changes; save before journaling')
+    path = Path(model_path).resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f'Saved FreeCAD model not found: {path}')
+    if expected_path is not None and str(path) != str(Path(expected_path).resolve()):
+        raise ValueError('FreeCAD document refers to a different model after validation')
+    digest = sha256(path)
+    if expected_sha256 is not None and digest != expected_sha256:
+        raise ValueError('Saved FreeCAD model changed during validation')
+    return str(path), digest
+
+
 def record_validation(result, model_path, report_path=None):
     if not os.environ.get(ENV): return None
     if not model_path or not report_path:
