@@ -62,9 +62,9 @@ python journal_manager.py render 'C:\path\to\project\Journal' journal.md
 
 GitHub Actions runs the dependency-free unit suite on Python 3.11 and 3.12 for pushes to `main` and pull requests. The CI checks do **not** run FreeCAD, Gmsh, or CalculiX; live engineering verification remains a separate step.
 
-With `FREECAD_JOURNAL_PROJECT` enabled, `validate_and_journal` now checks that the FreeCAD document is saved, has no unsaved changes (`doc.Modified == False`), and that its saved `.FCStd` file exists. It verifies the same path and SHA-256 file content after validation, before writing the report and journal event. A report path equal to the model path is rejected. If validation recomputation marks the document modified, the operation fails closed: save the document, then rerun validation. Direct `validate(doc)` remains unchanged.
+With `FREECAD_JOURNAL_PROJECT` enabled, `validate_and_journal` now checks that the FreeCAD document is saved, has no unsaved changes (`FreeCADGui.getDocument(doc.Name).Modified == False`), and that its saved `.FCStd` file exists. It verifies the same path and SHA-256 file content after validation, before writing the report and journal event. A report path equal to the model path is rejected. If validation recomputation marks the GUI document modified, the operation fails closed: save the document, then rerun validation. Direct `validate(doc)` remains unchanged.
 
-This guards the association between a validation result and saved evidence, but does not independently establish geometric correctness or prevent changes after the journal event. Live FreeCAD behavior must be tested before adopting this workflow.
+In FreeCAD 1.1.4, `App.Document` does not expose `Modified`; `doc.isSaved()` remains `True` for a label-only unsaved edit. The GUI `Modified` flag detects that edit. Journaled validation fails closed if the corresponding GUI document is unavailable; headless operation needs a separately validated approach.\n\nThis guards the association between a validation result and saved evidence, but does not independently establish geometric correctness or prevent changes after the journal event. Live FreeCAD behavior must be tested before adopting this workflow.
 
 ## Next development steps
 
