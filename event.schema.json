@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/freecad-toolkit/journal/event.schema.json",
+  "title": "FreeCAD Engineering Journal Event v1.0",
+  "type": "object",
+  "required": ["schema_version", "event_id", "event_type", "recorded_at", "occurred_at", "title", "summary", "status", "provenance", "source_refs", "artifact_refs", "related_event_ids", "requirements_ids", "design_revision", "actor"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "event_id": {"type":"string", "pattern":"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "event_type": {"enum":["design_revision","engineering_run","visual_review","functional_review","ergonomic_review","decision","requirements_change","correction","status_change","observation"]},
+    "recorded_at": {"type":"string", "format":"date-time"},
+    "occurred_at": {"type":["string","null"], "format":"date-time"},
+    "title": {"type":"string", "minLength":1},
+    "summary": {"type":"string", "minLength":1},
+    "status": {"enum":["reported","proposed","pending","approved","rejected","deferred","completed","invalid","superseded","not_verified"]},
+    "provenance": {"enum":["measured","reported","inferred","owner_statement","proposed"]},
+    "source_refs": {"type":"array", "items":{"type":"string"}},
+    "artifact_refs": {"type":"array", "items":{"type":"object", "required":["path"], "properties":{"path":{"type":"string"},"sha256":{"type":["string","null"],"pattern":"^[0-9a-f]{64}$"},"role":{"type":"string"}}}},
+    "related_event_ids": {"type":"array", "items":{"type":"string"}},
+    "requirements_ids": {"type":"array", "items":{"type":"string"}},
+    "design_revision": {"type":["string","null"]},
+    "actor": {"type":"string"},
+    "data": {"type":"object"}
+  },
+  "additionalProperties": false
+}
