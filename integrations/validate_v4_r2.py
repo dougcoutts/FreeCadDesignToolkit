@@ -225,18 +225,28 @@ if __name__ == "__main__":
 
 
 def validate_and_journal(doc, out_dir=None, export_basename=None, report_path=None):
-    """Call existing validate, optionally emit an append-only journal event."""
-    result = validate(doc, out_dir, export_basename)
-    if os.environ.get("FREECAD_JOURNAL_PROJECT"):
-        model_path = getattr(doc, "FileName", "")
-        if not model_path:
-            raise ValueError("Save FreeCAD document before journaling validation")
+    """Validate and, when enabled, journal against verified saved CAD evidence.
+
+    A document with unsaved changes is rejected. Re-checking the document and
+    file hash after validation prevents recording results for a replaced model.
+    Plain validate(doc) remains available without journaling.
+    """
+    journaling = bool(os.environ.get("FREECAD_JOURNAL_PROJECT"))
+    if journaling:
         if not report_path:
             raise ValueError("report_path is required when journaling validation")
+        bridge = _journal_bridge()
+        model_path, model_digest = bridge.verify_saved_model(doc)
+        if os.path.abspath(report_path) == os.path.abspath(model_path):
+            raise ValueError("Validation report must not overwrite the FreeCAD model")
+    result = validate(doc, out_dir, export_basename)
+    if journaling:
+        bridge.verify_saved_model(doc, model_digest, expected_path=model_path)
         with open(report_path, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, default=str)
-        _journal_bridge().record_validation(result, model_path, report_path)
+        bridge.record_validation(result, model_path, report_path)
     return result
+
 
 # Optional engineering journal bridge; set FREECAD_JOURNAL_PROJECT to enable.
 def _journal_bridge():
