@@ -64,6 +64,31 @@ def record_fem(kind, summary, summary_path, config_path, model_path=None, run_di
         'Completed FEM calculation; results are recorded, not automatically approved as compliant.',
         tag,[config_path,summary_path],artifacts,data)
 
+def verify_saved_model(doc, expected_sha256=None, expected_path=None):
+    """Fail closed if the document and saved FCStd evidence do not match.
+
+    Call before and after geometry validation. A saved file cannot prove that
+    geometry was correct, but it prevents attributing results to an unsaved or
+    concurrently replaced model. FreeCAD's Modified flag must be available.
+    """
+    model_path = getattr(doc, 'FileName', '')
+    if not model_path:
+        raise ValueError('Save FreeCAD document before journaling validation')
+    if not hasattr(doc, 'Modified'):
+        raise ValueError('Cannot verify FreeCAD document Modified state')
+    if bool(doc.Modified):
+        raise ValueError('FreeCAD document has unsaved changes; save before journaling')
+    path = Path(model_path).resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f'Saved FreeCAD model not found: {path}')
+    if expected_path is not None and str(path) != str(Path(expected_path).resolve()):
+        raise ValueError('FreeCAD document refers to a different model after validation')
+    digest = sha256(path)
+    if expected_sha256 is not None and digest != expected_sha256:
+        raise ValueError('Saved FreeCAD model changed during validation')
+    return str(path), digest
+
+
 def record_validation(result, model_path, report_path=None):
     if not os.environ.get(ENV): return None
     if not model_path or not report_path:
