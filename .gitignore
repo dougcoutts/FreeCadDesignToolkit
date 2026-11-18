@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# FreeCAD temporary and backup files
+*.FCStd1
+*.FCBak
+*.FCStd2
+
+# Generated validation/journal outputs (project data)
+Journal/events/
+Journal/ValidationTest/
+*.log
