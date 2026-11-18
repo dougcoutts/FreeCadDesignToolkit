@@ -65,18 +65,27 @@ def record_fem(kind, summary, summary_path, config_path, model_path=None, run_di
         tag,[config_path,summary_path],artifacts,data)
 
 def verify_saved_model(doc, expected_sha256=None, expected_path=None):
-    """Fail closed if the document and saved FCStd evidence do not match.
+    """Verify the saved FCStd evidence and GUI unsaved-change state.
 
-    Call before and after geometry validation. A saved file cannot prove that
-    geometry was correct, but it prevents attributing results to an unsaved or
-    concurrently replaced model. FreeCAD's Modified flag must be available.
+    FreeCAD App.Document has no Modified attribute in FreeCAD 1.1.4.
+    Gui.getDocument(doc.Name).Modified is the observed unsaved-change flag.
+    Fail closed if the matching GUI document cannot be checked.
     """
     model_path = getattr(doc, 'FileName', '')
     if not model_path:
         raise ValueError('Save FreeCAD document before journaling validation')
-    if not hasattr(doc, 'Modified'):
-        raise ValueError('Cannot verify FreeCAD document Modified state')
-    if bool(doc.Modified):
+    doc_name = getattr(doc, 'Name', None)
+    if not doc_name:
+        raise ValueError('Cannot identify FreeCAD document for GUI state check')
+    try:
+        import FreeCADGui as Gui
+        gui_doc = Gui.getDocument(doc_name)
+        if gui_doc is None:
+            raise ValueError('No matching FreeCAD GUI document for saved-model verification')
+        modified = bool(gui_doc.Modified)
+    except (ImportError, AttributeError) as exc:
+        raise ValueError('Cannot verify FreeCAD GUI document Modified state') from exc
+    if modified:
         raise ValueError('FreeCAD document has unsaved changes; save before journaling')
     path = Path(model_path).resolve()
     if not path.is_file():
