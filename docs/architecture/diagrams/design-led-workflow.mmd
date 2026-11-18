@@ -1,0 +1,11 @@
+flowchart TD
+    D["Design requirements: intent and use cases"] --> E["Derived engineering requirements"]
+    E --> I["Engineering implementation: CAD and processes"]
+    I --> V["Verification and design review"]
+    V --> C{"Requirements satisfied?"}
+    C -->|Yes| A["Document evidence and approval"]
+    C -->|No| F["Engineering findings and trade-offs"]
+    F --> R{"Change design intent?"}
+    R -->|No| I
+    R -->|Proposed| O["Authorized design decision"]
+    O --> D
